@@ -400,7 +400,7 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
                             }
                         }).toMetricSet()),
                 metric(name("jenkins", "job", "scheduled"), (jenkinsJobScheduleRate = new Meter())),
-                metric(name("jenkins", "task", "scheduled"), (jenkinsTaskScheduleRate = new Meter())),
+                // metric(name("jenkins", "task", "scheduled"), (jenkinsTaskScheduleRate = new Meter())),
                 metric(name("jenkins", "job", "count"),
                         new AutoSamplingHistogram(new DerivativeGauge<JobStats, Integer>(jobStats) {
                             @Override
@@ -408,93 +408,93 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
                                 return value.getJobCount();
                             }
                         }).toMetricSet()),
-                metric(name("jenkins", "job", "averageDepth"),
-                        new DerivativeGauge<JobStats, Double>(jobStats) {
-                            @Override
-                            protected Double transform(JobStats value) {
-                                return value.getDepthAverage();
-                            }
-                        }),
-                metric(name("jenkins", "project", "count"),
-                        new AutoSamplingHistogram(new DerivativeGauge<JobStats, Integer>(jobStats) {
-                            @Override
-                            protected Integer transform(JobStats value) {
-                                return value.getProjectCount();
-                            }
-                        }).toMetricSet()),
-                metric(name("jenkins", "project", "enabled", "count"),
-                        new AutoSamplingHistogram(new DerivativeGauge<JobStats, Integer>(jobStats) {
-                            @Override
-                            protected Integer transform(JobStats value) {
-                                return value.getEnabledProjectCount();
-                            }
-                        }).toMetricSet()),
-                metric(name("jenkins", "project", "disabled", "count"),
-                        new AutoSamplingHistogram(new DerivativeGauge<JobStats, Integer>(jobStats) {
-                            @Override
-                            protected Integer transform(JobStats value) {
-                                return value.getDisabledProjectCount();
-                            }
-                        }).toMetricSet()),
+                // metric(name("jenkins", "job", "averageDepth"),
+                //         new DerivativeGauge<JobStats, Double>(jobStats) {
+                //             @Override
+                //             protected Double transform(JobStats value) {
+                //                 return value.getDepthAverage();
+                //             }
+                //         }),
+                // metric(name("jenkins", "project", "count"),
+                //         new AutoSamplingHistogram(new DerivativeGauge<JobStats, Integer>(jobStats) {
+                //             @Override
+                //             protected Integer transform(JobStats value) {
+                //                 return value.getProjectCount();
+                //             }
+                //         }).toMetricSet()),
+                // metric(name("jenkins", "project", "enabled", "count"),
+                //         new AutoSamplingHistogram(new DerivativeGauge<JobStats, Integer>(jobStats) {
+                //             @Override
+                //             protected Integer transform(JobStats value) {
+                //                 return value.getEnabledProjectCount();
+                //             }
+                //         }).toMetricSet()),
+                // metric(name("jenkins", "project", "disabled", "count"),
+                //         new AutoSamplingHistogram(new DerivativeGauge<JobStats, Integer>(jobStats) {
+                //             @Override
+                //             protected Integer transform(JobStats value) {
+                //                 return value.getDisabledProjectCount();
+                //             }
+                //         }).toMetricSet()),
                 metric(name("jenkins", "job", "queuing", "duration"), (jenkinsJobQueueDuration = new Timer())),
                 metric(name("jenkins", "job", "waiting", "duration"), (jenkinsJobWaitingDuration = new Timer())),
                 metric(name("jenkins", "job", "blocked", "duration"), (jenkinsJobBlockedDuration = new Timer())),
                 metric(name("jenkins", "job", "buildable", "duration"), (jenkinsJobBuildableDuration = new Timer())),
                 metric(name("jenkins", "job", "building", "duration"), (jenkinsJobBuildingDuration = new Timer())),
                 metric(name("jenkins", "job", "execution", "time"), (jenkinsJobExecutionTime = new Timer())),
-                metric(name("jenkins", "task", "queuing", "duration"), (jenkinsTaskQueueDuration = new Timer())),
-                metric(name("jenkins", "task", "waiting", "duration"), (jenkinsTaskWaitingDuration = new Timer())),
-                metric(name("jenkins", "task", "blocked", "duration"), (jenkinsTaskBlockedDuration = new Timer())),
-                metric(name("jenkins", "task", "buildable", "duration"), (jenkinsTaskBuildableDuration = new Timer())),
-                metric(name("jenkins", "task", "execution", "duration"), (jenkinsTaskExecutionDuration = new Timer())),
+                // metric(name("jenkins", "task", "queuing", "duration"), (jenkinsTaskQueueDuration = new Timer())),
+                // metric(name("jenkins", "task", "waiting", "duration"), (jenkinsTaskWaitingDuration = new Timer())),
+                // metric(name("jenkins", "task", "blocked", "duration"), (jenkinsTaskBlockedDuration = new Timer())),
+                // metric(name("jenkins", "task", "buildable", "duration"), (jenkinsTaskBuildableDuration = new Timer())),
+                // metric(name("jenkins", "task", "execution", "duration"), (jenkinsTaskExecutionDuration = new Timer())),
                 metric(name("jenkins", "job", "total", "duration"), (jenkinsJobTotalDuration = new Timer())),
-                metric(name("jenkins", "plugins", "active"), new CachedGauge<Integer>(5, TimeUnit.MINUTES) {
-                    @Override
-                    protected Integer loadValue() {
-                        int count = 0;
-                        Jenkins jenkins = Jenkins.getInstance();
-                        for (PluginWrapper w : jenkins.getPluginManager().getPlugins()) {
-                            if (w.isActive()) {
-                                count++;
-                            }
-                        }
-                        return count;
-                    }
-                }),
-                metric(name("jenkins", "plugins", "inactive"), new CachedGauge<Integer>(5, TimeUnit.MINUTES) {
-                    @Override
-                    protected Integer loadValue() {
-                        int count = 0;
-                        Jenkins jenkins = Jenkins.getInstance();
-                        for (PluginWrapper w : jenkins.getPluginManager().getPlugins()) {
-                            if (!w.isActive()) {
-                                count++;
-                            }
-                        }
-                        return count;
-                    }
-                }),
-                metric(name("jenkins", "plugins", "failed"), new CachedGauge<Integer>(5, TimeUnit.MINUTES) {
-                    @Override
-                    protected Integer loadValue() {
-                        Jenkins jenkins = Jenkins.getInstance();
-                        return jenkins.getPluginManager().getFailedPlugins().size();
-                    }
-                }),
-                metric(name("jenkins", "plugins", "withUpdate"), new CachedGauge<Integer>(5, TimeUnit.MINUTES) {
-                    @Override
-                    protected Integer loadValue() {
-                        int count = 0;
-                        Jenkins jenkins = Jenkins.getInstance();
-                        for (PluginWrapper w : jenkins.getPluginManager().getPlugins()) {
-                            if (w.hasUpdate()) {
-                                count++;
-                            }
-                        }
-                        return count;
-                    }
-                }),
-                metric(name("jenkins", "runs"), runCounters())
+                // metric(name("jenkins", "plugins", "active"), new CachedGauge<Integer>(5, TimeUnit.MINUTES) {
+                //     @Override
+                //     protected Integer loadValue() {
+                //         int count = 0;
+                //         Jenkins jenkins = Jenkins.getInstance();
+                //         for (PluginWrapper w : jenkins.getPluginManager().getPlugins()) {
+                //             if (w.isActive()) {
+                //                 count++;
+                //             }
+                //         }
+                //         return count;
+                //     }
+                // }),
+                // metric(name("jenkins", "plugins", "inactive"), new CachedGauge<Integer>(5, TimeUnit.MINUTES) {
+                //     @Override
+                //     protected Integer loadValue() {
+                //         int count = 0;
+                //         Jenkins jenkins = Jenkins.getInstance();
+                //         for (PluginWrapper w : jenkins.getPluginManager().getPlugins()) {
+                //             if (!w.isActive()) {
+                //                 count++;
+                //             }
+                //         }
+                //         return count;
+                //     }
+                // }),
+                // metric(name("jenkins", "plugins", "failed"), new CachedGauge<Integer>(5, TimeUnit.MINUTES) {
+                //     @Override
+                //     protected Integer loadValue() {
+                //         Jenkins jenkins = Jenkins.getInstance();
+                //         return jenkins.getPluginManager().getFailedPlugins().size();
+                //     }
+                // }),
+                // metric(name("jenkins", "plugins", "withUpdate"), new CachedGauge<Integer>(5, TimeUnit.MINUTES) {
+                //     @Override
+                //     protected Integer loadValue() {
+                //         int count = 0;
+                //         Jenkins jenkins = Jenkins.getInstance();
+                //         for (PluginWrapper w : jenkins.getPluginManager().getPlugins()) {
+                //             if (w.hasUpdate()) {
+                //                 count++;
+                //             }
+                //         }
+                //         return count;
+                //     }
+                // }),
+                // metric(name("jenkins", "runs"), runCounters())
         );
     }
 
