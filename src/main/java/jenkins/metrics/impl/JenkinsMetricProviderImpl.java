@@ -135,6 +135,10 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
      */
     private Map<Computer, Timer> computerBuildDurations = new WeakHashMap<>();
     /**
+     * The offline status per computer.
+     */
+    private Map<Computer, Gauge> computerOfflineStatus = new WeakHashMap<>();
+    /**
      * The rate at which jobs are being scheduled.
      */
     private Meter jenkinsJobScheduleRate;
@@ -553,40 +557,22 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
 
     private synchronized void updateMetrics() {
         final Jenkins jenkins = Jenkins.getInstance();
+        MetricRegistry metricRegistry = Metrics.metricRegistry();
+
         Set<String> nodeMetricNames = new HashSet<>();
+        Set<String> offlineComputerMetricNames = new HashSet<>();
         for (Node node : jenkins.getNodes()) {
             nodeMetricNames.add(name("jenkins", "node", node.getNodeName(), "builds"));
+
+            String fullName = MetricRegistry.name("jenkins", "node", node.getNodeName(), "offline");
+            offlineComputerMetricNames.add(fullName);
+
             Computer computer = node.toComputer();
             if (computer != null) {
                 getOrCreateTimer(computer);
+                getOrCreateGauge(computer, fullName);
             }
         }
-
-        MetricRegistry metricRegistry = Metrics.metricRegistry();
-
-        Set<String> offlineComputerMetricNames = new HashSet<>();
-        for (Node node : jenkins.getNodes()) {
-            
-            Computer computer = node.toComputer();
-            if (computer != null) {
-
-                String fullName = MetricRegistry.name("jenkins", "node", node.getNodeName(), "offline");
-                offlineComputerMetricNames.add(fullName);
-
-                if (metricRegistry.getMetrics().containsKey(fullName)) {
-                  continue;
-                }
-                metricRegistry.register(fullName,
-                                         new Gauge<Integer>() {
-                                             @Override
-                                             public Integer getValue() {
-                                                 int offline = computer.isOffline() ? 1 : 0;
-                                                 return offline;
-                                             }
-                                         });
-            }
-        }
-
         metricRegistry.getGauges(JenkinsMetricProviderImpl::computerOfflineGauges)
                 .keySet()
                 .stream()
@@ -603,6 +589,18 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
     private synchronized Timer getOrCreateTimer(Computer computer) {
         return computerBuildDurations.computeIfAbsent(computer,
                 c -> Metrics.metricRegistry().timer(name("jenkins", "node", c.getName(), "builds")));
+    }
+
+    private synchronized Gauge getOrCreateGauge(Computer computer, String offlineComputerMetricName) {
+        return computerOfflineStatus.computeIfAbsent(computer,
+                 c -> Metrics.metricRegistry().register(offlineComputerMetricName,
+                                     new Gauge<Integer>() {
+                                         @Override
+                                         public Integer getValue() {
+                                             int offline = computer.isOffline() ? 1 : 0;
+                                             return offline;
+                                         }
+                                     }));
     }
 
     private static class QueueStats {
