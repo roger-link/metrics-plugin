@@ -505,6 +505,13 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
                 && metric instanceof Timer;
     }
 
+    private static boolean computerOfflineGauges(String s, Metric metric) {
+        return s.startsWith("jenkins_node")
+                && s.endsWith("offline")
+                && s.length() > ("jenkins_node_offline").length()
+                && metric instanceof Gauge;
+    }
+
     private MetricSet runCounters() {
         final Map<String, Metric> runCounters = new HashMap<>();
         for (String resultName : ResultRunListener.ALL) {
@@ -557,11 +564,14 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
 
         MetricRegistry metricRegistry = Metrics.metricRegistry();
 
+        Set<String> offlineComputerMetricNames = new HashSet<>();
         for (Node node : jenkins.getNodes()) {
-
+            
             Computer computer = node.toComputer();
             if (computer != null) {
+
                 String fullName = MetricRegistry.name("jenkins", "node", node.getNodeName(), "offline");
+                offlineComputerMetricNames.add(fullName);
 
                 if (metricRegistry.getMetrics().containsKey(fullName)) {
                   continue;
@@ -576,6 +586,12 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
                                          });
             }
         }
+
+        metricRegistry.getGauges(JenkinsMetricProviderImpl::computerOfflineGauges)
+                .keySet()
+                .stream()
+                .filter(name -> !offlineComputerMetricNames.contains(name))
+                .forEach(metricRegistry::remove);
 
         metricRegistry.getTimers(JenkinsMetricProviderImpl::computerBuildDurationTimers)
                 .keySet()
