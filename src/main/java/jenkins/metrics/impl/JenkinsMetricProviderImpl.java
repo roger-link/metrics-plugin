@@ -510,9 +510,8 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
     }
 
     private static boolean computerOfflineGauges(String s, Metric metric) {
-        return s.startsWith("jenkins_node")
-                && s.endsWith("offline")
-                && s.length() > ("jenkins_node_offline").length()
+        return s.startsWith("jenkins.node.")
+                && s.endsWith(".offline")
                 && metric instanceof Gauge;
     }
 
@@ -565,6 +564,7 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
             nodeMetricNames.add(name("jenkins", "node", node.getNodeName(), "builds"));
 
             String fullName = MetricRegistry.name("jenkins", "node", node.getNodeName(), "offline");
+
             offlineComputerMetricNames.add(fullName);
 
             Computer computer = node.toComputer();
@@ -573,6 +573,7 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
                 getOrCreateGauge(computer, fullName);
             }
         }
+
         metricRegistry.getGauges(JenkinsMetricProviderImpl::computerOfflineGauges)
                 .keySet()
                 .stream()
