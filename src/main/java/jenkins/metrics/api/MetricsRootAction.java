@@ -282,25 +282,25 @@ public class MetricsRootAction implements UnprotectedRootAction {
      * @return the {@link HttpResponse}
      * @throws IllegalAccessException if the access attempt is invalid.
      */
-    @SuppressWarnings("unused") // stapler binding
-    @Restricted(NoExternalUse.class) // stapler binding
-    public HttpResponse doHealthcheck(StaplerRequest req, @QueryParameter("key") String key)
-            throws IllegalAccessException {
-        requireCorrectMethod(req);
-        if (StringUtils.isBlank(key)) {
-            key = getKeyFromAuthorizationHeader(req);
-        }
-        Metrics.checkAccessKeyHealthCheck(key);
-        long ifModifiedSince = req.getDateHeader("If-Modified-Since");
-        long maxAge = getCacheControlMaxAge(req);
-        Metrics.HealthCheckData data = Metrics.getHealthCheckData();
-        if (data == null || (maxAge != -1 && data.getLastModified() + maxAge < System.currentTimeMillis())) {
-            data = new Metrics.HealthCheckData(Metrics.healthCheckRegistry().runHealthChecks());
-        } else if (ifModifiedSince != -1 && data.getLastModified() < ifModifiedSince) {
-            return Metrics.cors(key, HttpResponses.status(HttpServletResponse.SC_NOT_MODIFIED));
-        }
-        return Metrics.cors(key, new HealthCheckResponse(data));
-    }
+    // @SuppressWarnings("unused") // stapler binding
+    // @Restricted(NoExternalUse.class) // stapler binding
+    // public HttpResponse doHealthcheck(StaplerRequest req, @QueryParameter("key") String key)
+    //         throws IllegalAccessException {
+    //     requireCorrectMethod(req);
+    //     if (StringUtils.isBlank(key)) {
+    //         key = getKeyFromAuthorizationHeader(req);
+    //     }
+    //     // Metrics.checkAccessKeyHealthCheck(key);
+    //     long ifModifiedSince = req.getDateHeader("If-Modified-Since");
+    //     long maxAge = getCacheControlMaxAge(req);
+    //     Metrics.HealthCheckData data = Metrics.getHealthCheckData();
+    //     if (data == null || (maxAge != -1 && data.getLastModified() + maxAge < System.currentTimeMillis())) {
+    //         data = new Metrics.HealthCheckData(Metrics.healthCheckRegistry().runHealthChecks());
+    //     } else if (ifModifiedSince != -1 && data.getLastModified() < ifModifiedSince) {
+    //         return Metrics.cors(key, HttpResponses.status(HttpServletResponse.SC_NOT_MODIFIED));
+    //     }
+    //     return Metrics.cors(key, new HealthCheckResponse(data));
+    // }
 
     /**
      * Condense the health check into one bit of information
@@ -316,25 +316,25 @@ public class MetricsRootAction implements UnprotectedRootAction {
      * @param req the request
      * @return the HTTP response
      */
-    @SuppressWarnings("unused") // stapler binding
-    @Restricted(NoExternalUse.class) // stapler binding
-    public HttpResponse doHealthcheckOk(StaplerRequest req) {
-        long ifModifiedSince = req.getDateHeader("If-Modified-Since");
-        long maxAge = getCacheControlMaxAge(req);
-        Metrics.HealthCheckData data = Metrics.getHealthCheckData();
-        if (data == null || (maxAge != -1 && data.getLastModified() + maxAge < System.currentTimeMillis())) {
-            data = new Metrics.HealthCheckData(Metrics.healthCheckRegistry().runHealthChecks());
-        } else if (ifModifiedSince != -1 && data.getLastModified() < ifModifiedSince) {
-            return HttpResponses.status(HttpServletResponse.SC_NOT_MODIFIED);
-        }
-        for (HealthCheck.Result result : data.getResults().values()) {
-            if (!result.isHealthy()) {
-                return new StatusResponse(HttpServletResponse.SC_SERVICE_UNAVAILABLE, data.getLastModified(),
-                        data.getExpires());
-            }
-        }
-        return new StatusResponse(HttpServletResponse.SC_OK, data.getLastModified(), data.getExpires());
-    }
+    // @SuppressWarnings("unused") // stapler binding
+    // @Restricted(NoExternalUse.class) // stapler binding
+    // public HttpResponse doHealthcheckOk(StaplerRequest req) {
+    //     long ifModifiedSince = req.getDateHeader("If-Modified-Since");
+    //     long maxAge = getCacheControlMaxAge(req);
+    //     Metrics.HealthCheckData data = Metrics.getHealthCheckData();
+    //     if (data == null || (maxAge != -1 && data.getLastModified() + maxAge < System.currentTimeMillis())) {
+    //         data = new Metrics.HealthCheckData(Metrics.healthCheckRegistry().runHealthChecks());
+    //     } else if (ifModifiedSince != -1 && data.getLastModified() < ifModifiedSince) {
+    //         return HttpResponses.status(HttpServletResponse.SC_NOT_MODIFIED);
+    //     }
+    //     for (HealthCheck.Result result : data.getResults().values()) {
+    //         if (!result.isHealthy()) {
+    //             return new StatusResponse(HttpServletResponse.SC_SERVICE_UNAVAILABLE, data.getLastModified(),
+    //                     data.getExpires());
+    //         }
+    //     }
+    //     return new StatusResponse(HttpServletResponse.SC_OK, data.getLastModified(), data.getExpires());
+    // }
 
     /**
      * Binds the metrics to the CORS aware URL {@code /metrics/metrics} where the metrics access key is
@@ -433,19 +433,19 @@ public class MetricsRootAction implements UnprotectedRootAction {
          * @param req the request
          * @return the response
          */
-        @Restricted(NoExternalUse.class) // only for use by stapler web binding
-        public HttpResponse doHealthcheck(StaplerRequest req) {
-            long ifModifiedSince = req.getDateHeader("If-Modified-Since");
-            long maxAge = getCacheControlMaxAge(req);
-            Metrics.HealthCheckData data = Metrics.getHealthCheckData();
-            if (data == null || (maxAge != -1 && data.getLastModified() + maxAge < System.currentTimeMillis())) {
-                // if the max-age was specified, get live data
-                data = new Metrics.HealthCheckData(Metrics.healthCheckRegistry().runHealthChecks());
-            } else if (ifModifiedSince != -1 && data.getLastModified() < ifModifiedSince) {
-                return HttpResponses.status(HttpServletResponse.SC_NOT_MODIFIED);
-            }
-            return new HealthCheckResponse(data);
-        }
+        // @Restricted(NoExternalUse.class) // only for use by stapler web binding
+        // public HttpResponse doHealthcheck(StaplerRequest req) {
+        //     long ifModifiedSince = req.getDateHeader("If-Modified-Since");
+        //     long maxAge = getCacheControlMaxAge(req);
+        //     Metrics.HealthCheckData data = Metrics.getHealthCheckData();
+        //     if (data == null || (maxAge != -1 && data.getLastModified() + maxAge < System.currentTimeMillis())) {
+        //         // if the max-age was specified, get live data
+        //         data = new Metrics.HealthCheckData(Metrics.healthCheckRegistry().runHealthChecks());
+        //     } else if (ifModifiedSince != -1 && data.getLastModified() < ifModifiedSince) {
+        //         return HttpResponses.status(HttpServletResponse.SC_NOT_MODIFIED);
+        //     }
+        //     return new HealthCheckResponse(data);
+        // }
 
         /**
          * Web binding for {@literal /metrics}
@@ -620,64 +620,64 @@ public class MetricsRootAction implements UnprotectedRootAction {
     /**
      * A health check response.
      */
-    private class HealthCheckResponse implements HttpResponse {
-        /**
-         * The health check data.
-         */
-        @NonNull
-        private final Metrics.HealthCheckData data;
+    // private class HealthCheckResponse implements HttpResponse {
+    //     /**
+    //      * The health check data.
+    //      */
+    //     @NonNull
+    //     private final Metrics.HealthCheckData data;
 
-        /**
-         * Constructor.
-         * @param data the data.
-         */
-        public HealthCheckResponse(@NonNull Metrics.HealthCheckData data) {
-            this.data = data;
-        }
+    //     /**
+    //      * Constructor.
+    //      * @param data the data.
+    //      */
+    //     // public HealthCheckResponse(@NonNull Metrics.HealthCheckData data) {
+    //     //     this.data = data;
+    //     // }
 
-        /**
-         * {@inheritDoc}
-         */
-        public void generateResponse(StaplerRequest req, StaplerResponse resp, Object node) throws IOException,
-                ServletException {
-            boolean jsonp = StringUtils.isNotBlank(req.getParameter("callback"));
-            String jsonpCallback = StringUtils.defaultIfBlank(req.getParameter("callback"), "callback");
-            resp.setContentType(jsonp ? JSONP_CONTENT_TYPE : JSON_CONTENT_TYPE);
-            Long expires = data.getExpires();
-            if (expires == null) {
-                resp.setHeader(CACHE_CONTROL, NO_CACHE);
-            } else {
-                resp.setHeader(CACHE_CONTROL, String.format(MAX_AGE,
-                        TimeUnit.MILLISECONDS.toSeconds(expires - System.currentTimeMillis())));
-                resp.setDateHeader("Expires", expires);
-            }
-            resp.setDateHeader("Last-Modified", data.getLastModified());
-            SortedMap<String, HealthCheck.Result> results = data.getResults();
-            if (results.isEmpty()) {
-                resp.setStatus(HttpServletResponse.SC_NOT_IMPLEMENTED);
-            } else {
-                if (isAllHealthy(results)) {
-                    resp.setStatus(HttpServletResponse.SC_OK);
-                } else {
-                    resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                }
-            }
+    //     /**
+    //      * {@inheritDoc}
+    //      */
+    //     public void generateResponse(StaplerRequest req, StaplerResponse resp, Object node) throws IOException,
+    //             ServletException {
+    //         boolean jsonp = StringUtils.isNotBlank(req.getParameter("callback"));
+    //         String jsonpCallback = StringUtils.defaultIfBlank(req.getParameter("callback"), "callback");
+    //         resp.setContentType(jsonp ? JSONP_CONTENT_TYPE : JSON_CONTENT_TYPE);
+    //         Long expires = data.getExpires();
+    //         if (expires == null) {
+    //             resp.setHeader(CACHE_CONTROL, NO_CACHE);
+    //         } else {
+    //             resp.setHeader(CACHE_CONTROL, String.format(MAX_AGE,
+    //                     TimeUnit.MILLISECONDS.toSeconds(expires - System.currentTimeMillis())));
+    //             resp.setDateHeader("Expires", expires);
+    //         }
+    //         resp.setDateHeader("Last-Modified", data.getLastModified());
+    //         SortedMap<String, HealthCheck.Result> results = data.getResults();
+    //         if (results.isEmpty()) {
+    //             resp.setStatus(HttpServletResponse.SC_NOT_IMPLEMENTED);
+    //         } else {
+    //             if (isAllHealthy(results)) {
+    //                 resp.setStatus(HttpServletResponse.SC_OK);
+    //             } else {
+    //                 resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+    //             }
+    //         }
 
-            final OutputStream output = resp.getOutputStream();
-            try {
-                if (jsonp) {
-                    output.write(jsonpCallback.getBytes("US-ASCII"));
-                    output.write("(".getBytes("US-ASCII"));
-                }
-                output.write(getWriter(healthCheckMapper, req).writeValueAsBytes(results));
-                if (jsonp) {
-                    output.write(");".getBytes("US-ASCII"));
-                }
-            } finally {
-                output.close();
-            }
-        }
-    }
+    //         final OutputStream output = resp.getOutputStream();
+    //         try {
+    //             if (jsonp) {
+    //                 output.write(jsonpCallback.getBytes("US-ASCII"));
+    //                 output.write("(".getBytes("US-ASCII"));
+    //             }
+    //             output.write(getWriter(healthCheckMapper, req).writeValueAsBytes(results));
+    //             if (jsonp) {
+    //                 output.write(");".getBytes("US-ASCII"));
+    //             }
+    //         } finally {
+    //             output.close();
+    //         }
+    //     }
+    // }
 
     /**
      * A metrics response.
@@ -776,12 +776,12 @@ public class MetricsRootAction implements UnprotectedRootAction {
         /**
          * {@inheritDoc}
          */
-        @Restricted(NoExternalUse.class) // only for use by stapler web binding
-        @Override
-        public HttpResponse doHealthcheck(StaplerRequest req) {
-            Jenkins.getInstance().checkPermission(Metrics.HEALTH_CHECK);
-            return super.doHealthcheck(req);
-        }
+        // @Restricted(NoExternalUse.class) // only for use by stapler web binding
+        // @Override
+        // public HttpResponse doHealthcheck(StaplerRequest req) {
+        //     Jenkins.getInstance().checkPermission(Metrics.HEALTH_CHECK);
+        //     return super.doHealthcheck(req);
+        // }
 
         /**
          * {@inheritDoc}
@@ -858,12 +858,12 @@ public class MetricsRootAction implements UnprotectedRootAction {
         /**
          * {@inheritDoc}
          */
-        @Restricted(NoExternalUse.class) // only for use by stapler web binding
-        @Override
-        public HttpResponse doHealthcheck(StaplerRequest req) {
-            Metrics.checkAccessKeyHealthCheck(key);
-            return Metrics.cors(key, super.doHealthcheck(req));
-        }
+        // @Restricted(NoExternalUse.class) // only for use by stapler web binding
+        // @Override
+        // public HttpResponse doHealthcheck(StaplerRequest req) {
+        //     Metrics.checkAccessKeyHealthCheck(key);
+        //     return Metrics.cors(key, super.doHealthcheck(req));
+        // }
 
         /**
          * {@inheritDoc}

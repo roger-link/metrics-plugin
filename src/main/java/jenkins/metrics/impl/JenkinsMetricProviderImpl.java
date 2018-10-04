@@ -200,306 +200,306 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
     private Timer jenkinsJobTotalDuration;
 
     public JenkinsMetricProviderImpl() {
-        Gauge<QueueStats> jenkinsQueue = new CachedGauge<QueueStats>(1, TimeUnit.SECONDS) {
-            @Override
-            protected QueueStats loadValue() {
-                try (ACLContext ctx = ACL.as(ACL.SYSTEM)) {
-                    Queue queue = Jenkins.getInstance().getQueue();
-                    int length = 0;
-                    int blocked = 0;
-                    int buildable = 0;
-                    int pending = queue == null ? 0 : queue.getPendingItems().size();
-                    int stuck = 0;
-                    if (queue != null) {
-                        for (Queue.Item i : queue.getItems()) {
-                            if (i != null) {
-                                length++;
-                                try {
-                                    if (i.isBlocked()) {
-                                        blocked++;
-                                    }
-                                    if (i.isBuildable()) {
-                                        buildable++;
-                                    }
-                                    if (i.isStuck()) {
-                                        stuck++;
-                                    }
-                                } catch (Exception e) {
-                                    LOGGER.log(Level.FINE, "Uncaught exception recording queue statistics", e);
-                                } catch (OutOfMemoryError e) {
-                                    throw e;
-                                } catch (Throwable e) {
-                                    LOGGER.log(Level.FINE, "Uncaught throwable recording queue statistics", e);
-                                }
-                            }
-                        }
-                    }
-                    return new QueueStats(length, blocked, buildable, pending, stuck);
-                }
-            }
-        };
-        Gauge<NodeStats> jenkinsNodes = new
+        // Gauge<QueueStats> jenkinsQueue = new CachedGauge<QueueStats>(1, TimeUnit.SECONDS) {
+        //     @Override
+        //     protected QueueStats loadValue() {
+        //         try (ACLContext ctx = ACL.as(ACL.SYSTEM)) {
+        //             Queue queue = Jenkins.getInstance().getQueue();
+        //             int length = 0;
+        //             int blocked = 0;
+        //             int buildable = 0;
+        //             int pending = queue == null ? 0 : queue.getPendingItems().size();
+        //             int stuck = 0;
+        //             if (queue != null) {
+        //                 for (Queue.Item i : queue.getItems()) {
+        //                     if (i != null) {
+        //                         length++;
+        //                         try {
+        //                             if (i.isBlocked()) {
+        //                                 blocked++;
+        //                             }
+        //                             if (i.isBuildable()) {
+        //                                 buildable++;
+        //                             }
+        //                             if (i.isStuck()) {
+        //                                 stuck++;
+        //                             }
+        //                         } catch (Exception e) {
+        //                             LOGGER.log(Level.FINE, "Uncaught exception recording queue statistics", e);
+        //                         } catch (OutOfMemoryError e) {
+        //                             throw e;
+        //                         } catch (Throwable e) {
+        //                             LOGGER.log(Level.FINE, "Uncaught throwable recording queue statistics", e);
+        //                         }
+        //                     }
+        //                 }
+        //             }
+        //             return new QueueStats(length, blocked, buildable, pending, stuck);
+        //         }
+        //     }
+        // };
+        // Gauge<NodeStats> jenkinsNodes = new
 
-                CachedGauge<NodeStats>(1, TimeUnit.SECONDS) {
-                    @Override
-                    protected NodeStats loadValue() {
-                        try (ACLContext ctx = ACL.as(ACL.SYSTEM)) {
-                            int nodeCount = 0;
-                            int nodeOnline = 0;
-                            int executorCount = 0;
-                            int executorBuilding = 0;
-                            Jenkins jenkins = Jenkins.getInstance();
-                            if (jenkins.getNumExecutors() > 0) {
-                                nodeCount++;
-                                Computer computer = jenkins.toComputer();
-                                if (computer != null) {
-                                    if (!computer.isOffline()) {
-                                        nodeOnline++;
-                                        for (Executor e : computer.getExecutors()) {
-                                            executorCount++;
-                                            if (!e.isIdle()) {
-                                                executorBuilding++;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            for (Node node : jenkins.getNodes()) {
-                                nodeCount++;
-                                Computer computer = node.toComputer();
-                                if (computer == null) {
-                                    continue;
-                                }
-                                if (!computer.isOffline()) {
-                                    nodeOnline++;
-                                    for (Executor e : computer.getExecutors()) {
-                                        executorCount++;
-                                        if (!e.isIdle()) {
-                                            executorBuilding++;
-                                        }
-                                    }
-                                }
-                            }
-                            return new NodeStats(nodeCount, nodeOnline, executorCount, executorBuilding);
-                        }
-                    }
-                };
-        Gauge<JobStats> jobStats = new CachedGauge<JobStats>(5, TimeUnit.MINUTES) {
-            @Override
-            protected JobStats loadValue() {
-                try (ACLContext ctx = ACL.as(ACL.SYSTEM)) {
-                    int count = 0;
-                    int disabledProjects = 0;
-                    int projectCount = 0;
-                    long depthTotal = 0;
-                    Stack<ItemGroup> q = new Stack<ItemGroup>();
-                    q.push(Jenkins.getInstance());
-                    while (!q.isEmpty()) {
-                        ItemGroup<?> parent = q.pop();
-                        int depth = 0;
-                        ItemGroup p = parent;
-                        while (p != null) {
-                            depth++;
-                            p = p instanceof Item ? ((Item) p).getParent() : null;
-                        }
-                        for (Item i : parent.getItems()) {
-                            if (!(i instanceof TopLevelItem)) {
-                                continue;
-                            }
-                            if (i instanceof Job) {
-                                count++;
-                                depthTotal += depth;
-                                if (i instanceof AbstractProject) {
-                                    projectCount++;
-                                    if (((AbstractProject) i).isDisabled()) {
-                                        disabledProjects++;
-                                    }
-                                }
-                            }
-                            if (i instanceof ItemGroup) {
-                                q.push((ItemGroup) i);
-                            }
-                        }
-                    }
-                    return new JobStats(count, projectCount, disabledProjects,
-                            count == 0 ? 0.0 : depthTotal / ((double) count));
-                }
-            }
-        };
-        set = metrics(metric(name("jenkins", "queue", "size"),
-                new AutoSamplingHistogram(new DerivativeGauge<QueueStats, Integer>(jenkinsQueue) {
-                    @Override
-                    protected Integer transform(QueueStats value) {
-                        return value.getLength();
-                    }
-                }).toMetricSet()),
-                metric(name("jenkins", "queue", "blocked"),
-                        new AutoSamplingHistogram(new DerivativeGauge<QueueStats, Integer>(jenkinsQueue) {
-                            @Override
-                            protected Integer transform(QueueStats value) {
-                                return value.getBlocked();
-                            }
-                        }).toMetricSet()),
-                metric(name("jenkins", "queue", "buildable"),
-                        new AutoSamplingHistogram(new DerivativeGauge<QueueStats, Integer>(jenkinsQueue) {
-                            @Override
-                            protected Integer transform(QueueStats value) {
-                                return value.getBuildable();
-                            }
-                        }).toMetricSet()),
-                metric(name("jenkins", "queue", "stuck"),
-                        new AutoSamplingHistogram(new DerivativeGauge<QueueStats, Integer>(jenkinsQueue) {
-                            @Override
-                            protected Integer transform(QueueStats value) {
-                                return value.getStuck();
-                            }
-                        }).toMetricSet()),
-                metric(name("jenkins", "queue", "pending"),
-                        new AutoSamplingHistogram(new DerivativeGauge<QueueStats, Integer>(jenkinsQueue) {
-                            @Override
-                            protected Integer transform(QueueStats value) {
-                                return value.getPending();
-                            }
-                        }).toMetricSet()),
-                metric(name("jenkins", "node", "count"), (jenkinsNodeTotalCount =
-                        new AutoSamplingHistogram(new DerivativeGauge<NodeStats, Integer>(jenkinsNodes) {
-                            @Override
-                            protected Integer transform(NodeStats value) {
-                                return value.getNodeCount();
-                            }
-                        })).toMetricSet()),
-                metric(name("jenkins", "node", "online"), (jenkinsNodeOnlineCount =
-                        new AutoSamplingHistogram(new DerivativeGauge<NodeStats, Integer>(jenkinsNodes) {
-                            @Override
-                            protected Integer transform(NodeStats value) {
-                                return value.getNodeOnline();
-                            }
-                        })).toMetricSet()),
-                metric(name("jenkins", "node", "offline"),
-                        new AutoSamplingHistogram(new DerivativeGauge<NodeStats, Integer>(jenkinsNodes) {
-                            @Override
-                            protected Integer transform(NodeStats value) {
-                                return value.getNodeOffline();
-                            }
-                        }).toMetricSet()),
-                metric(name("jenkins", "executor", "count"), (jenkinsExecutorTotalCount =
-                        new AutoSamplingHistogram(new DerivativeGauge<NodeStats, Integer>(jenkinsNodes) {
-                            @Override
-                            protected Integer transform(NodeStats value) {
-                                return value.getExecutorCount();
-                            }
-                        })).toMetricSet()),
-                metric(name("jenkins", "executor", "in-use"), (jenkinsExecutorUsedCount =
-                        new AutoSamplingHistogram(new DerivativeGauge<NodeStats, Integer>(jenkinsNodes) {
-                            @Override
-                            protected Integer transform(NodeStats value) {
-                                return value.getExecutorBuilding();
-                            }
-                        })).toMetricSet()),
-                metric(name("jenkins", "executor", "free"),
-                        new AutoSamplingHistogram(new DerivativeGauge<NodeStats, Integer>(jenkinsNodes) {
-                            @Override
-                            protected Integer transform(NodeStats value) {
-                                return value.getExecutorAvailable();
-                            }
-                        }).toMetricSet()),
-                metric(name("jenkins", "job", "scheduled"), (jenkinsJobScheduleRate = new Meter())),
-                metric(name("jenkins", "task", "scheduled"), (jenkinsTaskScheduleRate = new Meter())),
-                metric(name("jenkins", "job", "count"),
-                        new AutoSamplingHistogram(new DerivativeGauge<JobStats, Integer>(jobStats) {
-                            @Override
-                            protected Integer transform(JobStats value) {
-                                return value.getJobCount();
-                            }
-                        }).toMetricSet()),
-                metric(name("jenkins", "job", "averageDepth"),
-                        new DerivativeGauge<JobStats, Double>(jobStats) {
-                            @Override
-                            protected Double transform(JobStats value) {
-                                return value.getDepthAverage();
-                            }
-                        }),
-                metric(name("jenkins", "project", "count"),
-                        new AutoSamplingHistogram(new DerivativeGauge<JobStats, Integer>(jobStats) {
-                            @Override
-                            protected Integer transform(JobStats value) {
-                                return value.getProjectCount();
-                            }
-                        }).toMetricSet()),
-                metric(name("jenkins", "project", "enabled", "count"),
-                        new AutoSamplingHistogram(new DerivativeGauge<JobStats, Integer>(jobStats) {
-                            @Override
-                            protected Integer transform(JobStats value) {
-                                return value.getEnabledProjectCount();
-                            }
-                        }).toMetricSet()),
-                metric(name("jenkins", "project", "disabled", "count"),
-                        new AutoSamplingHistogram(new DerivativeGauge<JobStats, Integer>(jobStats) {
-                            @Override
-                            protected Integer transform(JobStats value) {
-                                return value.getDisabledProjectCount();
-                            }
-                        }).toMetricSet()),
-                metric(name("jenkins", "job", "queuing", "duration"), (jenkinsJobQueueDuration = new Timer())),
-                metric(name("jenkins", "job", "waiting", "duration"), (jenkinsJobWaitingDuration = new Timer())),
-                metric(name("jenkins", "job", "blocked", "duration"), (jenkinsJobBlockedDuration = new Timer())),
-                metric(name("jenkins", "job", "buildable", "duration"), (jenkinsJobBuildableDuration = new Timer())),
-                metric(name("jenkins", "job", "building", "duration"), (jenkinsJobBuildingDuration = new Timer())),
-                metric(name("jenkins", "job", "execution", "time"), (jenkinsJobExecutionTime = new Timer())),
-                metric(name("jenkins", "task", "queuing", "duration"), (jenkinsTaskQueueDuration = new Timer())),
-                metric(name("jenkins", "task", "waiting", "duration"), (jenkinsTaskWaitingDuration = new Timer())),
-                metric(name("jenkins", "task", "blocked", "duration"), (jenkinsTaskBlockedDuration = new Timer())),
-                metric(name("jenkins", "task", "buildable", "duration"), (jenkinsTaskBuildableDuration = new Timer())),
-                metric(name("jenkins", "task", "execution", "duration"), (jenkinsTaskExecutionDuration = new Timer())),
-                metric(name("jenkins", "job", "total", "duration"), (jenkinsJobTotalDuration = new Timer())),
-                metric(name("jenkins", "plugins", "active"), new CachedGauge<Integer>(5, TimeUnit.MINUTES) {
-                    @Override
-                    protected Integer loadValue() {
-                        int count = 0;
-                        Jenkins jenkins = Jenkins.getInstance();
-                        for (PluginWrapper w : jenkins.getPluginManager().getPlugins()) {
-                            if (w.isActive()) {
-                                count++;
-                            }
-                        }
-                        return count;
-                    }
-                }),
-                metric(name("jenkins", "plugins", "inactive"), new CachedGauge<Integer>(5, TimeUnit.MINUTES) {
-                    @Override
-                    protected Integer loadValue() {
-                        int count = 0;
-                        Jenkins jenkins = Jenkins.getInstance();
-                        for (PluginWrapper w : jenkins.getPluginManager().getPlugins()) {
-                            if (!w.isActive()) {
-                                count++;
-                            }
-                        }
-                        return count;
-                    }
-                }),
-                metric(name("jenkins", "plugins", "failed"), new CachedGauge<Integer>(5, TimeUnit.MINUTES) {
-                    @Override
-                    protected Integer loadValue() {
-                        Jenkins jenkins = Jenkins.getInstance();
-                        return jenkins.getPluginManager().getFailedPlugins().size();
-                    }
-                }),
-                metric(name("jenkins", "plugins", "withUpdate"), new CachedGauge<Integer>(5, TimeUnit.MINUTES) {
-                    @Override
-                    protected Integer loadValue() {
-                        int count = 0;
-                        Jenkins jenkins = Jenkins.getInstance();
-                        for (PluginWrapper w : jenkins.getPluginManager().getPlugins()) {
-                            if (w.hasUpdate()) {
-                                count++;
-                            }
-                        }
-                        return count;
-                    }
-                }),
-                metric(name("jenkins", "runs"), runCounters())
-        );
+        //         CachedGauge<NodeStats>(1, TimeUnit.SECONDS) {
+        //             @Override
+        //             protected NodeStats loadValue() {
+        //                 try (ACLContext ctx = ACL.as(ACL.SYSTEM)) {
+        //                     int nodeCount = 0;
+        //                     int nodeOnline = 0;
+        //                     int executorCount = 0;
+        //                     int executorBuilding = 0;
+        //                     Jenkins jenkins = Jenkins.getInstance();
+        //                     if (jenkins.getNumExecutors() > 0) {
+        //                         nodeCount++;
+        //                         Computer computer = jenkins.toComputer();
+        //                         if (computer != null) {
+        //                             if (!computer.isOffline()) {
+        //                                 nodeOnline++;
+        //                                 for (Executor e : computer.getExecutors()) {
+        //                                     executorCount++;
+        //                                     if (!e.isIdle()) {
+        //                                         executorBuilding++;
+        //                                     }
+        //                                 }
+        //                             }
+        //                         }
+        //                     }
+        //                     for (Node node : jenkins.getNodes()) {
+        //                         nodeCount++;
+        //                         Computer computer = node.toComputer();
+        //                         if (computer == null) {
+        //                             continue;
+        //                         }
+        //                         if (!computer.isOffline()) {
+        //                             nodeOnline++;
+        //                             for (Executor e : computer.getExecutors()) {
+        //                                 executorCount++;
+        //                                 if (!e.isIdle()) {
+        //                                     executorBuilding++;
+        //                                 }
+        //                             }
+        //                         }
+        //                     }
+        //                     return new NodeStats(nodeCount, nodeOnline, executorCount, executorBuilding);
+        //                 }
+        //             }
+        //         };
+        // Gauge<JobStats> jobStats = new CachedGauge<JobStats>(5, TimeUnit.MINUTES) {
+        //     @Override
+        //     protected JobStats loadValue() {
+        //         try (ACLContext ctx = ACL.as(ACL.SYSTEM)) {
+        //             int count = 0;
+        //             int disabledProjects = 0;
+        //             int projectCount = 0;
+        //             long depthTotal = 0;
+        //             Stack<ItemGroup> q = new Stack<ItemGroup>();
+        //             q.push(Jenkins.getInstance());
+        //             while (!q.isEmpty()) {
+        //                 ItemGroup<?> parent = q.pop();
+        //                 int depth = 0;
+        //                 ItemGroup p = parent;
+        //                 while (p != null) {
+        //                     depth++;
+        //                     p = p instanceof Item ? ((Item) p).getParent() : null;
+        //                 }
+        //                 for (Item i : parent.getItems()) {
+        //                     if (!(i instanceof TopLevelItem)) {
+        //                         continue;
+        //                     }
+        //                     if (i instanceof Job) {
+        //                         count++;
+        //                         depthTotal += depth;
+        //                         if (i instanceof AbstractProject) {
+        //                             projectCount++;
+        //                             if (((AbstractProject) i).isDisabled()) {
+        //                                 disabledProjects++;
+        //                             }
+        //                         }
+        //                     }
+        //                     if (i instanceof ItemGroup) {
+        //                         q.push((ItemGroup) i);
+        //                     }
+        //                 }
+        //             }
+        //             return new JobStats(count, projectCount, disabledProjects,
+        //                     count == 0 ? 0.0 : depthTotal / ((double) count));
+        //         }
+        //     }
+        // };
+        // set = metrics(metric(name("jenkins", "queue", "size"),
+        //         new AutoSamplingHistogram(new DerivativeGauge<QueueStats, Integer>(jenkinsQueue) {
+        //             @Override
+        //             protected Integer transform(QueueStats value) {
+        //                 return value.getLength();
+        //             }
+        //         }).toMetricSet()),
+                // metric(name("jenkins", "queue", "blocked"),
+                //         new AutoSamplingHistogram(new DerivativeGauge<QueueStats, Integer>(jenkinsQueue) {
+                //             @Override
+                //             protected Integer transform(QueueStats value) {
+                //                 return value.getBlocked();
+                //             }
+                //         }).toMetricSet()),
+                // metric(name("jenkins", "queue", "buildable"),
+                //         new AutoSamplingHistogram(new DerivativeGauge<QueueStats, Integer>(jenkinsQueue) {
+                //             @Override
+                //             protected Integer transform(QueueStats value) {
+                //                 return value.getBuildable();
+                //             }
+                //         }).toMetricSet()),
+                // metric(name("jenkins", "queue", "stuck"),
+                //         new AutoSamplingHistogram(new DerivativeGauge<QueueStats, Integer>(jenkinsQueue) {
+                //             @Override
+                //             protected Integer transform(QueueStats value) {
+                //                 return value.getStuck();
+                //             }
+                //         }).toMetricSet()),
+                // metric(name("jenkins", "queue", "pending"),
+                //         new AutoSamplingHistogram(new DerivativeGauge<QueueStats, Integer>(jenkinsQueue) {
+                //             @Override
+                //             protected Integer transform(QueueStats value) {
+                //                 return value.getPending();
+                //             }
+                //         }).toMetricSet()),
+                // metric(name("jenkins", "node", "count"), (jenkinsNodeTotalCount =
+                //         new AutoSamplingHistogram(new DerivativeGauge<NodeStats, Integer>(jenkinsNodes) {
+                //             @Override
+                //             protected Integer transform(NodeStats value) {
+                //                 return value.getNodeCount();
+                //             }
+                //         })).toMetricSet()),
+                // metric(name("jenkins", "node", "online"), (jenkinsNodeOnlineCount =
+                //         new AutoSamplingHistogram(new DerivativeGauge<NodeStats, Integer>(jenkinsNodes) {
+                //             @Override
+                //             protected Integer transform(NodeStats value) {
+                //                 return value.getNodeOnline();
+                //             }
+                //         })).toMetricSet()),
+                // metric(name("jenkins", "node", "offline"),
+                //         new AutoSamplingHistogram(new DerivativeGauge<NodeStats, Integer>(jenkinsNodes) {
+                //             @Override
+                //             protected Integer transform(NodeStats value) {
+                //                 return value.getNodeOffline();
+                //             }
+                //         }).toMetricSet()),
+                // metric(name("jenkins", "executor", "count"), (jenkinsExecutorTotalCount =
+                //         new AutoSamplingHistogram(new DerivativeGauge<NodeStats, Integer>(jenkinsNodes) {
+                //             @Override
+                //             protected Integer transform(NodeStats value) {
+                //                 return value.getExecutorCount();
+                //             }
+                //         })).toMetricSet()),
+                // metric(name("jenkins", "executor", "in-use"), (jenkinsExecutorUsedCount =
+                //         new AutoSamplingHistogram(new DerivativeGauge<NodeStats, Integer>(jenkinsNodes) {
+                //             @Override
+                //             protected Integer transform(NodeStats value) {
+                //                 return value.getExecutorBuilding();
+                //             }
+                //         })).toMetricSet()),
+                // metric(name("jenkins", "executor", "free"),
+                //         new AutoSamplingHistogram(new DerivativeGauge<NodeStats, Integer>(jenkinsNodes) {
+                //             @Override
+                //             protected Integer transform(NodeStats value) {
+                //                 return value.getExecutorAvailable();
+                //             }
+                //         }).toMetricSet()),
+                // metric(name("jenkins", "job", "scheduled"), (jenkinsJobScheduleRate = new Meter())),
+                // metric(name("jenkins", "task", "scheduled"), (jenkinsTaskScheduleRate = new Meter())),
+                // metric(name("jenkins", "job", "count"),
+                //         new AutoSamplingHistogram(new DerivativeGauge<JobStats, Integer>(jobStats) {
+                //             @Override
+                //             protected Integer transform(JobStats value) {
+                //                 return value.getJobCount();
+                //             }
+                //         }).toMetricSet()),
+                // metric(name("jenkins", "job", "averageDepth"),
+                //         new DerivativeGauge<JobStats, Double>(jobStats) {
+                //             @Override
+                //             protected Double transform(JobStats value) {
+                //                 return value.getDepthAverage();
+                //             }
+                //         }),
+                // metric(name("jenkins", "project", "count"),
+                //         new AutoSamplingHistogram(new DerivativeGauge<JobStats, Integer>(jobStats) {
+                //             @Override
+                //             protected Integer transform(JobStats value) {
+                //                 return value.getProjectCount();
+                //             }
+                //         }).toMetricSet()),
+                // metric(name("jenkins", "project", "enabled", "count"),
+                //         new AutoSamplingHistogram(new DerivativeGauge<JobStats, Integer>(jobStats) {
+                //             @Override
+                //             protected Integer transform(JobStats value) {
+                //                 return value.getEnabledProjectCount();
+                //             }
+                //         }).toMetricSet()),
+                // metric(name("jenkins", "project", "disabled", "count"),
+                //         new AutoSamplingHistogram(new DerivativeGauge<JobStats, Integer>(jobStats) {
+                //             @Override
+                //             protected Integer transform(JobStats value) {
+                //                 return value.getDisabledProjectCount();
+                //             }
+                //         }).toMetricSet()),
+                // metric(name("jenkins", "job", "queuing", "duration"), (jenkinsJobQueueDuration = new Timer())),
+                // metric(name("jenkins", "job", "waiting", "duration"), (jenkinsJobWaitingDuration = new Timer())),
+                // metric(name("jenkins", "job", "blocked", "duration"), (jenkinsJobBlockedDuration = new Timer())),
+                // metric(name("jenkins", "job", "buildable", "duration"), (jenkinsJobBuildableDuration = new Timer())),
+                // metric(name("jenkins", "job", "building", "duration"), (jenkinsJobBuildingDuration = new Timer())),
+                // metric(name("jenkins", "job", "execution", "time"), (jenkinsJobExecutionTime = new Timer()))
+                // metric(name("jenkins", "task", "queuing", "duration"), (jenkinsTaskQueueDuration = new Timer())),
+                // metric(name("jenkins", "task", "waiting", "duration"), (jenkinsTaskWaitingDuration = new Timer())),
+                // metric(name("jenkins", "task", "blocked", "duration"), (jenkinsTaskBlockedDuration = new Timer())),
+                // metric(name("jenkins", "task", "buildable", "duration"), (jenkinsTaskBuildableDuration = new Timer())),
+                // metric(name("jenkins", "task", "execution", "duration"), (jenkinsTaskExecutionDuration = new Timer())),
+                // metric(name("jenkins", "job", "total", "duration"), (jenkinsJobTotalDuration = new Timer())),
+                // metric(name("jenkins", "plugins", "active"), new CachedGauge<Integer>(5, TimeUnit.MINUTES) {
+                //     @Override
+                //     protected Integer loadValue() {
+                //         int count = 0;
+                //         Jenkins jenkins = Jenkins.getInstance();
+                //         for (PluginWrapper w : jenkins.getPluginManager().getPlugins()) {
+                //             if (w.isActive()) {
+                //                 count++;
+                //             }
+                //         }
+                //         return count;
+                //     }
+                // }),
+                // metric(name("jenkins", "plugins", "inactive"), new CachedGauge<Integer>(5, TimeUnit.MINUTES) {
+                //     @Override
+                //     protected Integer loadValue() {
+                //         int count = 0;
+                //         Jenkins jenkins = Jenkins.getInstance();
+                //         for (PluginWrapper w : jenkins.getPluginManager().getPlugins()) {
+                //             if (!w.isActive()) {
+                //                 count++;
+                //             }
+                //         }
+                //         return count;
+                //     }
+                // }),
+                // metric(name("jenkins", "plugins", "failed"), new CachedGauge<Integer>(5, TimeUnit.MINUTES) {
+                //     @Override
+                //     protected Integer loadValue() {
+                //         Jenkins jenkins = Jenkins.getInstance();
+                //         return jenkins.getPluginManager().getFailedPlugins().size();
+                //     }
+                // }),
+                // metric(name("jenkins", "plugins", "withUpdate"), new CachedGauge<Integer>(5, TimeUnit.MINUTES) {
+                //     @Override
+                //     protected Integer loadValue() {
+                //         int count = 0;
+                //         Jenkins jenkins = Jenkins.getInstance();
+                //         for (PluginWrapper w : jenkins.getPluginManager().getPlugins()) {
+                //             if (w.hasUpdate()) {
+                //                 count++;
+                //             }
+                //         }
+                //         return count;
+                //     }
+                // }),
+                // metric(name("jenkins", "runs"), runCounters())
+        // );
     }
 
     private static boolean computerBuildDurationTimers(String s, Metric metric) {
@@ -558,10 +558,10 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
         final Jenkins jenkins = Jenkins.getInstance();
         MetricRegistry metricRegistry = Metrics.metricRegistry();
 
-        Set<String> nodeMetricNames = new HashSet<>();
+        // Set<String> nodeMetricNames = new HashSet<>();
         Set<String> offlineComputerMetricNames = new HashSet<>();
         for (Node node : jenkins.getNodes()) {
-            nodeMetricNames.add(name("jenkins", "node", node.getNodeName(), "builds"));
+            // nodeMetricNames.add(name("jenkins", "node", node.getNodeName(), "builds"));
 
             String fullName = MetricRegistry.name("jenkins", "node", node.getNodeName(), "offline");
 
@@ -569,7 +569,7 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
 
             Computer computer = node.toComputer();
             if (computer != null) {
-                getOrCreateTimer(computer);
+                // getOrCreateTimer(computer);
                 getOrCreateGauge(computer, fullName);
             }
         }
@@ -580,17 +580,17 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
                 .filter(name -> !offlineComputerMetricNames.contains(name))
                 .forEach(metricRegistry::remove);
 
-        metricRegistry.getTimers(JenkinsMetricProviderImpl::computerBuildDurationTimers)
-                .keySet()
-                .stream()
-                .filter(name -> !nodeMetricNames.contains(name))
-                .forEach(metricRegistry::remove);
+        // metricRegistry.getTimers(JenkinsMetricProviderImpl::computerBuildDurationTimers)
+        //         .keySet()
+        //         .stream()
+        //         .filter(name -> !nodeMetricNames.contains(name))
+        //         .forEach(metricRegistry::remove);
     }
 
-    private synchronized Timer getOrCreateTimer(Computer computer) {
-        return computerBuildDurations.computeIfAbsent(computer,
-                c -> Metrics.metricRegistry().timer(name("jenkins", "node", c.getName(), "builds")));
-    }
+    // private synchronized Timer getOrCreateTimer(Computer computer) {
+    //     return computerBuildDurations.computeIfAbsent(computer,
+    //             c -> Metrics.metricRegistry().timer(name("jenkins", "node", c.getName(), "builds")));
+    // }
 
     private synchronized Gauge getOrCreateGauge(Computer computer, String offlineComputerMetricName) {
         return computerOfflineStatus.computeIfAbsent(computer,
@@ -604,114 +604,114 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
                                      }));
     }
 
-    private static class QueueStats {
-        private final int length;
-        private final int blocked;
-        private final int buildable;
-        private final int stuck;
-        private final int pending;
+    // private static class QueueStats {
+    //     private final int length;
+    //     private final int blocked;
+    //     private final int buildable;
+    //     private final int stuck;
+    //     private final int pending;
 
-        public QueueStats(int length, int blocked, int buildable, int pending, int stuck) {
-            this.length = length;
-            this.blocked = blocked;
-            this.buildable = buildable;
-            this.pending = pending;
-            this.stuck = stuck;
-        }
+    //     public QueueStats(int length, int blocked, int buildable, int pending, int stuck) {
+    //         this.length = length;
+    //         this.blocked = blocked;
+    //         this.buildable = buildable;
+    //         this.pending = pending;
+    //         this.stuck = stuck;
+    //     }
 
-        public int getBlocked() {
-            return blocked;
-        }
+    //     public int getBlocked() {
+    //         return blocked;
+    //     }
 
-        public int getBuildable() {
-            return buildable;
-        }
+    //     public int getBuildable() {
+    //         return buildable;
+    //     }
 
-        public int getLength() {
-            return length;
-        }
+    //     public int getLength() {
+    //         return length;
+    //     }
 
-        public int getPending() {
-            return pending;
-        }
+    //     public int getPending() {
+    //         return pending;
+    //     }
 
-        public int getStuck() {
-            return stuck;
-        }
-    }
+    //     public int getStuck() {
+    //         return stuck;
+    //     }
+    // }
 
-    private static class NodeStats {
-        private final int nodeCount;
-        private final int nodeOnline;
-        private final int executorCount;
-        private final int executorBuilding;
+    // private static class NodeStats {
+    //     private final int nodeCount;
+    //     private final int nodeOnline;
+    //     private final int executorCount;
+    //     private final int executorBuilding;
 
-        public NodeStats(int nodeCount, int nodeOnline, int executorCount, int executorBuilding) {
-            this.nodeCount = nodeCount;
-            this.nodeOnline = nodeOnline;
-            this.executorCount = executorCount;
-            this.executorBuilding = executorBuilding;
-        }
+    //     public NodeStats(int nodeCount, int nodeOnline, int executorCount, int executorBuilding) {
+    //         this.nodeCount = nodeCount;
+    //         this.nodeOnline = nodeOnline;
+    //         this.executorCount = executorCount;
+    //         this.executorBuilding = executorBuilding;
+    //     }
 
-        public int getExecutorAvailable() {
-            return executorCount - executorBuilding;
-        }
+    //     public int getExecutorAvailable() {
+    //         return executorCount - executorBuilding;
+    //     }
 
-        public int getExecutorBuilding() {
-            return executorBuilding;
-        }
+    //     public int getExecutorBuilding() {
+    //         return executorBuilding;
+    //     }
 
-        public int getExecutorCount() {
-            return executorCount;
-        }
+    //     public int getExecutorCount() {
+    //         return executorCount;
+    //     }
 
-        public int getNodeCount() {
-            return nodeCount;
-        }
+    //     public int getNodeCount() {
+    //         return nodeCount;
+    //     }
 
-        public int getNodeOffline() {
-            return nodeCount - nodeOnline;
-        }
+    //     public int getNodeOffline() {
+    //         return nodeCount - nodeOnline;
+    //     }
 
-        public int getNodeOnline() {
-            return nodeOnline;
-        }
-    }
+    //     public int getNodeOnline() {
+    //         return nodeOnline;
+    //     }
+    // }
 
-    private static class JobStats {
-        private final int jobCount;
-        private final int disabledProjectCount;
-        private final int projectCount;
-        private final double depthAverage;
+    // private static class JobStats {
+    //     private final int jobCount;
+    //     private final int disabledProjectCount;
+    //     private final int projectCount;
+    //     private final double depthAverage;
 
 
-        public JobStats(int jobCount, int projectCount, int disabledProjectCount, double depthAverage) {
-            this.jobCount = jobCount;
-            this.disabledProjectCount = disabledProjectCount;
-            this.projectCount = projectCount;
-            this.depthAverage = depthAverage;
-        }
+    //     public JobStats(int jobCount, int projectCount, int disabledProjectCount, double depthAverage) {
+    //         this.jobCount = jobCount;
+    //         this.disabledProjectCount = disabledProjectCount;
+    //         this.projectCount = projectCount;
+    //         this.depthAverage = depthAverage;
+    //     }
 
-        public int getJobCount() {
-            return jobCount;
-        }
+    //     public int getJobCount() {
+    //         return jobCount;
+    //     }
 
-        public int getDisabledProjectCount() {
-            return disabledProjectCount;
-        }
+    //     public int getDisabledProjectCount() {
+    //         return disabledProjectCount;
+    //     }
 
-        public int getProjectCount() {
-            return projectCount;
-        }
+    //     public int getProjectCount() {
+    //         return projectCount;
+    //     }
 
-        public Integer getEnabledProjectCount() {
-            return projectCount - disabledProjectCount;
-        }
+    //     public Integer getEnabledProjectCount() {
+    //         return projectCount - disabledProjectCount;
+    //     }
 
-        public double getDepthAverage() {
-            return depthAverage;
-        }
-    }
+    //     public double getDepthAverage() {
+    //         return depthAverage;
+    //     }
+    // }
 
     @Extension
     public static class PeriodicWorkImpl extends PeriodicWork {
@@ -778,65 +778,65 @@ public class JenkinsMetricProviderImpl extends MetricProvider {
 
     }
 
-    @Extension
-    public static class RunListenerImpl extends RunListener<Run> {
-        private Map<Run, List<Timer.Context>> contexts = new HashMap<>();
+    // @Extension
+    // public static class RunListenerImpl extends RunListener<Run> {
+    //     private Map<Run, List<Timer.Context>> contexts = new HashMap<>();
 
         /**
          * {@inheritDoc}
          */
-        @Override
-        public synchronized void onStarted(Run run, TaskListener listener) {
-            JenkinsMetricProviderImpl instance = instance();
-            if (instance != null) {
-                List<Timer.Context> contextList = new ArrayList<>();
-                contextList.add(instance.jenkinsJobBuildingDuration.time());
-                Executor executor = run.getExecutor();
-                if (executor != null) {
-                    Computer computer = executor.getOwner();
-                    Timer timer = instance.getOrCreateTimer(computer);
-                    contextList.add(timer.time());
-                }
-                contexts.put(run, contextList);
-            }
-            ScheduledRate.instance().addAction(run);
-        }
+        // @Override
+        // public synchronized void onStarted(Run run, TaskListener listener) {
+        //     JenkinsMetricProviderImpl instance = instance();
+        //     if (instance != null) {
+        //         List<Timer.Context> contextList = new ArrayList<>();
+        //         contextList.add(instance.jenkinsJobBuildingDuration.time());
+        //         Executor executor = run.getExecutor();
+        //         if (executor != null) {
+        //             Computer computer = executor.getOwner();
+        //             // Timer timer = instance.getOrCreateTimer(computer);
+        //             // contextList.add(timer.time());
+        //         }
+        //         contexts.put(run, contextList);
+        //     }
+        //     ScheduledRate.instance().addAction(run);
+        // }
 
         /**
          * {@inheritDoc}
          */
-        @Override
-        public synchronized void onCompleted(Run run, TaskListener listener) {
-            List<Timer.Context> contextList = contexts.remove(run);
-            if (contextList != null) {
-                for (Timer.Context context : contextList) {
-                    context.stop();
-                }
-            }
-            JenkinsMetricProviderImpl instance = instance();
-            TimeInQueueAction action = run.getAction(TimeInQueueAction.class);
-            if (action != null && instance != null) {
-                if (instance.jenkinsJobQueueDuration != null) {
-                    instance.jenkinsJobQueueDuration.update(action.getQueuingTimeMillis(), TimeUnit.MILLISECONDS);
-                }
-                if (instance.jenkinsJobBlockedDuration != null) {
-                    instance.jenkinsJobBlockedDuration.update(action.getBlockedTimeMillis(), TimeUnit.MILLISECONDS);
-                }
-                if (instance.jenkinsJobBuildableDuration != null) {
-                    instance.jenkinsJobBuildableDuration.update(action.getBuildableTimeMillis(), TimeUnit.MILLISECONDS);
-                }
-                if (instance.jenkinsJobWaitingDuration != null) {
-                    instance.jenkinsJobWaitingDuration.update(action.getWaitingTimeMillis(), TimeUnit.MILLISECONDS);
-                }
-                if (instance.jenkinsJobTotalDuration != null) {
-                    instance.jenkinsJobTotalDuration.update(action.getTotalDurationMillis(), TimeUnit.MILLISECONDS);
-                }
-                if (instance.jenkinsJobExecutionTime != null) {
-                    instance.jenkinsJobExecutionTime.update(action.getExecutingTimeMillis(), TimeUnit.MILLISECONDS);
-                }
-            }
-        }
-    }
+        // @Override
+        // public synchronized void onCompleted(Run run, TaskListener listener) {
+        //     List<Timer.Context> contextList = contexts.remove(run);
+        //     if (contextList != null) {
+        //         for (Timer.Context context : contextList) {
+        //             context.stop();
+        //         }
+        //     }
+        //     JenkinsMetricProviderImpl instance = instance();
+        //     TimeInQueueAction action = run.getAction(TimeInQueueAction.class);
+        //     if (action != null && instance != null) {
+        //         if (instance.jenkinsJobQueueDuration != null) {
+        //             instance.jenkinsJobQueueDuration.update(action.getQueuingTimeMillis(), TimeUnit.MILLISECONDS);
+        //         }
+        //         if (instance.jenkinsJobBlockedDuration != null) {
+        //             instance.jenkinsJobBlockedDuration.update(action.getBlockedTimeMillis(), TimeUnit.MILLISECONDS);
+        //         }
+        //         if (instance.jenkinsJobBuildableDuration != null) {
+        //             instance.jenkinsJobBuildableDuration.update(action.getBuildableTimeMillis(), TimeUnit.MILLISECONDS);
+        //         }
+        //         if (instance.jenkinsJobWaitingDuration != null) {
+        //             instance.jenkinsJobWaitingDuration.update(action.getWaitingTimeMillis(), TimeUnit.MILLISECONDS);
+        //         }
+        //         if (instance.jenkinsJobTotalDuration != null) {
+        //             instance.jenkinsJobTotalDuration.update(action.getTotalDurationMillis(), TimeUnit.MILLISECONDS);
+        //         }
+        //         if (instance.jenkinsJobExecutionTime != null) {
+        //             instance.jenkinsJobExecutionTime.update(action.getExecutingTimeMillis(), TimeUnit.MILLISECONDS);
+        //         }
+        //     }
+        // }
+    // }
 
     @Extension(ordinal = Double.MAX_VALUE)
     public static class SchedulingRate extends Queue.QueueDecisionHandler {
